@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VENOM - Wireless Pentesting Toolkit</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+
+  <!-- ========== HEADER ========== -->
+  <div class="header-banner">
+    <div class="smiley-left">
+      <svg viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="30" cy="30" r="28" fill="#FFD700" stroke="#333" stroke-width="2"/>
+        <circle cx="20" cy="22" r="4" fill="#111"/>
+        <circle cx="40" cy="22" r="4" fill="#111"/>
+        <path d="M16 38 Q30 52 44 38" stroke="#111" stroke-width="3" fill="none" stroke-linecap="round"/>
+      </svg>
+    </div>
+    <div class="header-center">
+      <div class="title-block">
+        <div class="title-ascii">
+          <span>__   _____ _  _  ___  __  __</span>
+          <span>\ \ / / __| \| |/ _ \|  \/  |</span>
+          <span> \ V /| _|| .` | (_) | |\/| |</span>
+          <span>  \_/ |___|_|\_|\___/|_|  |_|</span>
+        </div>
+        <div class="subtitle">Wireless Pentesting Toolkit v3.0</div>
+        <div class="auth-notice">&#9632; AUTHORIZED TESTING ONLY &#9632;</div>
+      </div>
+      <div class="launch-buttons">
+        <button class="launch-btn" onclick="showSection('attacks')">&#9632; LAUNCH</button>
+        <button class="launch-btn infect" onclick="triggerVenom()">&#9632; INFECT</button>
+        <button class="launch-btn grow" onclick="showSection('loot')">&#9632; GROW</button>
+      </div>
+    </div>
+    <div class="smiley-right">
+      <svg viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="30" cy="30" r="28" fill="#FFD700" stroke="#333" stroke-width="2"/>
+        <!-- cracked/evil eyes -->
+        <path d="M14 18 L26 24 M26 18 L14 24" stroke="#111" stroke-width="3" stroke-linecap="round"/>
+        <path d="M34 18 L46 24 M46 18 L34 24" stroke="#111" stroke-width="3" stroke-linecap="round"/>
+        <!-- evil grin -->
+        <path d="M14 42 L18 36 L23 40 L30 34 L37 40 L42 36 L46 42" stroke="#111" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+    </div>
+  </div>
+  <div class="launching-bar">LAUNCHING VIRUS</div>
+
+  <!-- ========== MAIN LAYOUT ========== -->
+  <div class="main-layout">
+
+    <!-- LEFT: Status + Controls -->
+    <div class="panel left-panel">
+
+      <!-- Status -->
+      <div class="panel-section">
+        <div class="panel-title">[ STATUS ]</div>
+        <div class="status-row"><span class="lbl">Interface</span><span id="st-iface" class="val">{{ state.wifi_iface or 'Not Set' }}</span></div>
+        <div class="status-row"><span class="lbl">Monitor</span><span id="st-mon" class="val">{{ state.monitor_iface or 'No' }}</span></div>
+        <div class="status-row"><span class="lbl">Target SSID</span><span id="st-ssid" class="val">{{ state.target_ssid or 'Not Set' }}</span></div>
+        <div class="status-row"><span class="lbl">BSSID</span><span id="st-bssid" class="val">{{ state.target_bssid or '—' }}</span></div>
+        <div class="status-row"><span class="lbl">Channel</span><span id="st-chan" class="val">{{ state.target_channel or '—' }}</span></div>
+      </div>
+
+      <!-- Interface -->
+      <div class="panel-section">
+        <div class="panel-title">[ INTERFACE ]</div>
+        <select id="iface-select" class="retro-select">
+          <option value="">-- select --</option>
+          {% for iface in interfaces %}
+          <option value="{{ iface }}" {% if iface == state.wifi_iface %}selected{% endif %}>{{ iface }}</option>
+          {% endfor %}
+        </select>
+        <div class="btn-row">
+          <button class="retro-btn" onclick="setIface()">SET</button>
+          <button class="retro-btn" onclick="refreshIfaces()">REFRESH</button>
+        </div>
+        <div class="btn-row">
+          <button class="retro-btn warn" onclick="enableMonitor()">MON ON</button>
+          <button class="retro-btn" onclick="disableMonitor()">MON OFF</button>
+        </div>
+      </div>
+
+      <!-- Scan -->
+      <div class="panel-section" id="section-scan">
+        <div class="panel-title">[ SCAN ]</div>
+        <button class="retro-btn full" onclick="scanNetworks()">SCAN NETWORKS</button>
+        <button class="retro-btn full" onclick="channelHop()">CHANNEL-HOP SCAN</button>
+        <div id="scan-results" class="scan-results"></div>
+      </div>
+
+      <!-- Config -->
+      <div class="panel-section">
+        <div class="panel-title">[ CONFIG ]</div>
+        <button class="retro-btn full" onclick="saveConfig()">SAVE CONFIG</button>
+        <button class="retro-btn full" onclick="loadConfig()">LOAD CONFIG</button>
+      </div>
+
+    </div>
+
+    <!-- CENTER: Terminal output -->
+    <div class="panel center-panel">
+      <div class="panel-title">[ TERMINAL OUTPUT ]
+        <span class="title-right">
+          <button class="mini-btn" onclick="clearTerminal()">CLR</button>
+          <button class="mini-btn warn" onclick="stopProcess()">STOP</button>
+        </span>
+      </div>
+      <div id="terminal" class="terminal"></div>
+    </div>
+
+    <!-- RIGHT: Attacks + Loot -->
+    <div class="panel right-panel">
+
+      <!-- Attacks -->
+      <div class="panel-section" id="section-attacks">
+        <div class="panel-title">[ ATTACKS ]</div>
+
+        <div class="attack-block">
+          <div class="atk-title warn-text">DEAUTH</div>
+          <div class="input-row">
+            <input id="deauth-packets" class="retro-input" type="number" placeholder="Packets [64]" value="64">
+            <input id="deauth-client" class="retro-input" type="text" placeholder="Client MAC (opt)">
+          </div>
+          <button class="retro-btn warn full" onclick="deauthAttack()">LAUNCH DEAUTH</button>
+        </div>
+
+        <div class="attack-block">
+          <div class="atk-title warn-text">WPA HANDSHAKE</div>
+          <button class="retro-btn warn full" onclick="captureHandshake()">CAPTURE HANDSHAKE</button>
+        </div>
+
+        <div class="attack-block">
+          <div class="atk-title warn-text">PMKID</div>
+          <button class="retro-btn warn full" onclick="pmkidAttack()">PMKID ATTACK</button>
+        </div>
+
+        <div class="attack-block">
+          <div class="atk-title warn-text">EVIL TWIN AP</div>
+          <button class="retro-btn warn full" onclick="evilTwin()">LAUNCH EVIL TWIN</button>
+        </div>
+
+        <div class="attack-block">
+          <div class="atk-title warn-text">WPS PIN</div>
+          <button class="retro-btn warn full" onclick="wpsAttack()">WPS PIN ATTACK</button>
+        </div>
+
+        <div class="attack-block venom-block">
+          <div class="atk-title venom-text">&#9670; VENOM ATTACK &#9670;</div>
+          <div class="atk-sub">WPA-Enterprise Rogue AP + Cred Harvest</div>
+          <button class="retro-btn venom full" onclick="triggerVenom()">LAUNCH VENOM</button>
+        </div>
+
+        <div class="attack-block">
+          <div class="atk-title">ENUMERATE CLIENTS</div>
+          <button class="retro-btn full" onclick="enumClients()">ENUMERATE</button>
+        </div>
+      </div>
+
+      <!-- Loot -->
+      <div class="panel-section" id="section-loot">
+        <div class="panel-title">[ LOOT ]
+          <button class="mini-btn" onclick="refreshLoot()">REFRESH</button>
+        </div>
+        <div id="loot-list" class="loot-list"></div>
+        <div id="loot-viewer" class="loot-viewer"></div>
+      </div>
+
+    </div>
+  </div>
+
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
