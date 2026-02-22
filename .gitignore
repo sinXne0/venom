@@ -1,7 +1,0 @@
-venom_loot/
-venom.conf
-__pycache__/
-*.pyc
-*.pyo
-/tmp/
-.claude/
