@@ -3,173 +3,251 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>VENOM - Wireless Pentesting Toolkit</title>
+  <title>VENOM v3.0 — Wireless Pentesting Toolkit</title>
   <link rel="stylesheet" href="/static/css/style.css">
 </head>
 <body>
 
+  <!-- CRT scanline overlay -->
+  <div class="scanlines"></div>
+
   <!-- ========== HEADER ========== -->
-  <div class="header-banner">
-    <div class="smiley-left">
-      <svg viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg">
-        <circle cx="30" cy="30" r="28" fill="#FFD700" stroke="#333" stroke-width="2"/>
-        <circle cx="20" cy="22" r="4" fill="#111"/>
-        <circle cx="40" cy="22" r="4" fill="#111"/>
-        <path d="M16 38 Q30 52 44 38" stroke="#111" stroke-width="3" fill="none" stroke-linecap="round"/>
+  <header class="header">
+    <div class="header-smiley">
+      <svg viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg" class="smiley happy">
+        <circle cx="30" cy="30" r="27" fill="#FFD700" stroke="#b8a000" stroke-width="2"/>
+        <circle cx="20" cy="23" r="4" fill="#111"/>
+        <circle cx="40" cy="23" r="4" fill="#111"/>
+        <circle cx="21" cy="21" r="1.5" fill="#fff" opacity="0.5"/>
+        <circle cx="41" cy="21" r="1.5" fill="#fff" opacity="0.5"/>
+        <path d="M17 38 Q30 52 43 38" stroke="#111" stroke-width="3" fill="none" stroke-linecap="round"/>
       </svg>
     </div>
+
     <div class="header-center">
-      <div class="title-block">
-        <div class="title-ascii">
-          <span>__   _____ _  _  ___  __  __</span>
-          <span>\ \ / / __| \| |/ _ \|  \/  |</span>
-          <span> \ V /| _|| .` | (_) | |\/| |</span>
-          <span>  \_/ |___|_|\_|\___/|_|  |_|</span>
-        </div>
-        <div class="subtitle">Wireless Pentesting Toolkit v3.0</div>
-        <div class="auth-notice">&#9632; AUTHORIZED TESTING ONLY &#9632;</div>
+      <pre class="ascii-title">
+ __   _____ _  _  ___  __  __
+ \ \ / / __| \| |/ _ \|  \/  |
+  \ V /| _|| .` | (_) | |\/| |
+   \_/ |___|_|\_|\___/|_|  |_|</pre>
+      <div class="header-meta">
+        <span class="badge badge-version">v3.0</span>
+        <span class="badge badge-warn">AUTHORIZED TESTING ONLY</span>
+        <span class="badge badge-info" id="badge-status">IDLE</span>
       </div>
-      <div class="launch-buttons">
-        <button class="launch-btn" onclick="showSection('attacks')">&#9632; LAUNCH</button>
-        <button class="launch-btn infect" onclick="triggerVenom()">&#9632; INFECT</button>
-        <button class="launch-btn grow" onclick="showSection('loot')">&#9632; GROW</button>
-      </div>
+      <nav class="header-nav">
+        <button class="nav-btn" onclick="showSection('scan')">&#9632; LAUNCH</button>
+        <button class="nav-btn nav-infect" onclick="triggerVenom()">&#9632; INFECT</button>
+        <button class="nav-btn nav-loot" onclick="showSection('loot')">&#9632; GROW</button>
+        <button class="nav-btn nav-stop" onclick="stopProcess()">&#9632; ABORT</button>
+      </nav>
     </div>
-    <div class="smiley-right">
-      <svg viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg">
-        <circle cx="30" cy="30" r="28" fill="#FFD700" stroke="#333" stroke-width="2"/>
-        <!-- cracked/evil eyes -->
-        <path d="M14 18 L26 24 M26 18 L14 24" stroke="#111" stroke-width="3" stroke-linecap="round"/>
-        <path d="M34 18 L46 24 M46 18 L34 24" stroke="#111" stroke-width="3" stroke-linecap="round"/>
-        <!-- evil grin -->
-        <path d="M14 42 L18 36 L23 40 L30 34 L37 40 L42 36 L46 42" stroke="#111" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+
+    <div class="header-smiley">
+      <svg viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg" class="smiley evil">
+        <circle cx="30" cy="30" r="27" fill="#FFD700" stroke="#b8a000" stroke-width="2"/>
+        <path d="M14 20 L24 26 M24 20 L14 26" stroke="#111" stroke-width="3" stroke-linecap="round"/>
+        <path d="M36 20 L46 26 M46 20 L36 26" stroke="#111" stroke-width="3" stroke-linecap="round"/>
+        <path d="M14 43 L19 37 L24 41 L30 35 L36 41 L41 37 L46 43"
+              stroke="#111" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
       </svg>
     </div>
+  </header>
+
+  <div class="launching-bar">
+    <span class="lb-text">LAUNCHING VIRUS</span>
+    <span class="lb-dots" id="lb-dots"></span>
   </div>
-  <div class="launching-bar">LAUNCHING VIRUS</div>
 
-  <!-- ========== MAIN LAYOUT ========== -->
-  <div class="main-layout">
+  <!-- ========== MAIN ========== -->
+  <div class="workspace">
 
-    <!-- LEFT: Status + Controls -->
-    <div class="panel left-panel">
+    <!-- ===== LEFT COLUMN ===== -->
+    <aside class="col col-left">
 
-      <!-- Status -->
-      <div class="panel-section">
-        <div class="panel-title">[ STATUS ]</div>
-        <div class="status-row"><span class="lbl">Interface</span><span id="st-iface" class="val">{{ state.wifi_iface or 'Not Set' }}</span></div>
-        <div class="status-row"><span class="lbl">Monitor</span><span id="st-mon" class="val">{{ state.monitor_iface or 'No' }}</span></div>
-        <div class="status-row"><span class="lbl">Target SSID</span><span id="st-ssid" class="val">{{ state.target_ssid or 'Not Set' }}</span></div>
-        <div class="status-row"><span class="lbl">BSSID</span><span id="st-bssid" class="val">{{ state.target_bssid or '—' }}</span></div>
-        <div class="status-row"><span class="lbl">Channel</span><span id="st-chan" class="val">{{ state.target_channel or '—' }}</span></div>
-      </div>
+      <!-- STATUS -->
+      <section class="card" id="section-status">
+        <h2 class="card-title"><span class="title-icon">◈</span> STATUS</h2>
+        <div class="stat-grid">
+          <div class="stat-item">
+            <div class="stat-label">INTERFACE</div>
+            <div class="stat-value" id="st-iface">{{ state.wifi_iface or 'NOT SET' }}</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-label">MONITOR</div>
+            <div class="stat-value" id="st-mon">{{ state.monitor_iface or 'OFF' }}</div>
+          </div>
+          <div class="stat-item stat-wide">
+            <div class="stat-label">TARGET SSID</div>
+            <div class="stat-value accent" id="st-ssid">{{ state.target_ssid or 'NOT SET' }}</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-label">BSSID</div>
+            <div class="stat-value mono" id="st-bssid">{{ state.target_bssid or '—' }}</div>
+          </div>
+          <div class="stat-item">
+            <div class="stat-label">CHANNEL</div>
+            <div class="stat-value" id="st-chan">{{ state.target_channel or '—' }}</div>
+          </div>
+        </div>
+      </section>
 
-      <!-- Interface -->
-      <div class="panel-section">
-        <div class="panel-title">[ INTERFACE ]</div>
+      <!-- INTERFACE -->
+      <section class="card">
+        <h2 class="card-title"><span class="title-icon">◈</span> INTERFACE</h2>
         <select id="iface-select" class="retro-select">
-          <option value="">-- select --</option>
+          <option value="">— select interface —</option>
           {% for iface in interfaces %}
           <option value="{{ iface }}" {% if iface == state.wifi_iface %}selected{% endif %}>{{ iface }}</option>
           {% endfor %}
         </select>
-        <div class="btn-row">
-          <button class="retro-btn" onclick="setIface()">SET</button>
-          <button class="retro-btn" onclick="refreshIfaces()">REFRESH</button>
+        <div class="btn-group">
+          <button class="btn btn-primary" onclick="setIface()">SET</button>
+          <button class="btn" onclick="refreshIfaces()">REFRESH</button>
         </div>
-        <div class="btn-row">
-          <button class="retro-btn warn" onclick="enableMonitor()">MON ON</button>
-          <button class="retro-btn" onclick="disableMonitor()">MON OFF</button>
+        <div class="btn-group">
+          <button class="btn btn-danger" onclick="enableMonitor()">MON ON</button>
+          <button class="btn" onclick="disableMonitor()">MON OFF</button>
         </div>
-      </div>
+      </section>
 
-      <!-- Scan -->
-      <div class="panel-section" id="section-scan">
-        <div class="panel-title">[ SCAN ]</div>
-        <button class="retro-btn full" onclick="scanNetworks()">SCAN NETWORKS</button>
-        <button class="retro-btn full" onclick="channelHop()">CHANNEL-HOP SCAN</button>
+      <!-- SCAN -->
+      <section class="card" id="section-scan">
+        <h2 class="card-title"><span class="title-icon">◈</span> SCAN</h2>
+        <button class="btn btn-primary full" onclick="scanNetworks()">
+          <span id="scan-btn-text">&#9656; SCAN NETWORKS</span>
+        </button>
+        <button class="btn full" onclick="channelHop()">&#9656; CHANNEL-HOP (CLI)</button>
         <div id="scan-results" class="scan-results"></div>
-      </div>
+      </section>
 
-      <!-- Config -->
-      <div class="panel-section">
-        <div class="panel-title">[ CONFIG ]</div>
-        <button class="retro-btn full" onclick="saveConfig()">SAVE CONFIG</button>
-        <button class="retro-btn full" onclick="loadConfig()">LOAD CONFIG</button>
-      </div>
+      <!-- CONFIG -->
+      <section class="card">
+        <h2 class="card-title"><span class="title-icon">◈</span> SESSION</h2>
+        <button class="btn full" onclick="saveConfig()">SAVE CONFIG</button>
+        <button class="btn full" onclick="loadConfig()">LOAD CONFIG</button>
+        <div class="clock-row">
+          <span class="clock-label">UPTIME</span>
+          <span class="clock-value" id="uptime">00:00:00</span>
+        </div>
+      </section>
 
-    </div>
+    </aside>
 
-    <!-- CENTER: Terminal output -->
-    <div class="panel center-panel">
-      <div class="panel-title">[ TERMINAL OUTPUT ]
-        <span class="title-right">
-          <button class="mini-btn" onclick="clearTerminal()">CLR</button>
-          <button class="mini-btn warn" onclick="stopProcess()">STOP</button>
-        </span>
-      </div>
-      <div id="terminal" class="terminal"></div>
-    </div>
-
-    <!-- RIGHT: Attacks + Loot -->
-    <div class="panel right-panel">
-
-      <!-- Attacks -->
-      <div class="panel-section" id="section-attacks">
-        <div class="panel-title">[ ATTACKS ]</div>
-
-        <div class="attack-block">
-          <div class="atk-title warn-text">DEAUTH</div>
-          <div class="input-row">
-            <input id="deauth-packets" class="retro-input" type="number" placeholder="Packets [64]" value="64">
-            <input id="deauth-client" class="retro-input" type="text" placeholder="Client MAC (opt)">
+    <!-- ===== CENTER: TERMINAL ===== -->
+    <main class="col col-center">
+      <section class="card terminal-card">
+        <h2 class="card-title">
+          <span class="title-icon">◈</span> TERMINAL
+          <span class="title-right">
+            <span class="proc-indicator" id="proc-indicator"></span>
+            <button class="btn-icon" onclick="clearTerminal()" title="Clear">✕ CLR</button>
+            <button class="btn-icon btn-icon-danger" onclick="stopProcess()" title="Stop">&#9632; STOP</button>
+          </span>
+        </h2>
+        <div id="terminal" class="terminal">
+          <div class="term-welcome">
+            <span class="t-green">[+]</span> VENOM v3.0 Web Interface ready.<br>
+            <span class="t-dim">    Select an interface, scan for targets, then launch attacks.</span><br>
+            <span class="t-dim">    All output streams here in real-time.</span>
           </div>
-          <button class="retro-btn warn full" onclick="deauthAttack()">LAUNCH DEAUTH</button>
+        </div>
+      </section>
+    </main>
+
+    <!-- ===== RIGHT COLUMN ===== -->
+    <aside class="col col-right">
+
+      <!-- ATTACKS -->
+      <section class="card" id="section-attacks">
+        <h2 class="card-title"><span class="title-icon">◈</span> ATTACKS</h2>
+
+        <div class="atk-card">
+          <div class="atk-header">
+            <span class="atk-icon">⚡</span>
+            <span class="atk-name">DEAUTHENTICATION</span>
+          </div>
+          <div class="atk-desc">Disconnect clients from the target AP by flooding deauth frames.</div>
+          <div class="atk-inputs">
+            <input id="deauth-packets" class="retro-input" type="number" placeholder="Packets [64]" value="64" min="0">
+            <input id="deauth-client" class="retro-input" type="text" placeholder="Client MAC (blank = broadcast)">
+          </div>
+          <button class="btn btn-danger full" onclick="deauthAttack()">LAUNCH DEAUTH</button>
         </div>
 
-        <div class="attack-block">
-          <div class="atk-title warn-text">WPA HANDSHAKE</div>
-          <button class="retro-btn warn full" onclick="captureHandshake()">CAPTURE HANDSHAKE</button>
+        <div class="atk-card">
+          <div class="atk-header">
+            <span class="atk-icon">🤝</span>
+            <span class="atk-name">WPA HANDSHAKE</span>
+          </div>
+          <div class="atk-desc">Capture the 4-way WPA/WPA2 handshake for offline cracking.</div>
+          <button class="btn btn-danger full" onclick="captureHandshake()">CAPTURE HANDSHAKE</button>
         </div>
 
-        <div class="attack-block">
-          <div class="atk-title warn-text">PMKID</div>
-          <button class="retro-btn warn full" onclick="pmkidAttack()">PMKID ATTACK</button>
+        <div class="atk-card">
+          <div class="atk-header">
+            <span class="atk-icon">🔑</span>
+            <span class="atk-name">PMKID ATTACK</span>
+          </div>
+          <div class="atk-desc">Capture PMKID hash without needing a connected client. No deauth required.</div>
+          <button class="btn btn-danger full" onclick="pmkidAttack()">PMKID ATTACK</button>
         </div>
 
-        <div class="attack-block">
-          <div class="atk-title warn-text">EVIL TWIN AP</div>
-          <button class="retro-btn warn full" onclick="evilTwin()">LAUNCH EVIL TWIN</button>
+        <div class="atk-card">
+          <div class="atk-header">
+            <span class="atk-icon">👿</span>
+            <span class="atk-name">EVIL TWIN AP</span>
+          </div>
+          <div class="atk-desc">Clone the target SSID as an open AP. Deauths real AP clients in background.</div>
+          <button class="btn btn-danger full" onclick="evilTwin()">LAUNCH EVIL TWIN</button>
         </div>
 
-        <div class="attack-block">
-          <div class="atk-title warn-text">WPS PIN</div>
-          <button class="retro-btn warn full" onclick="wpsAttack()">WPS PIN ATTACK</button>
+        <div class="atk-card">
+          <div class="atk-header">
+            <span class="atk-icon">📡</span>
+            <span class="atk-name">WPS PIN ATTACK</span>
+          </div>
+          <div class="atk-desc">Brute-force WPS PIN using reaver or bully. Works on WPS-enabled routers.</div>
+          <button class="btn btn-danger full" onclick="wpsAttack()">WPS PIN ATTACK</button>
         </div>
 
-        <div class="attack-block venom-block">
-          <div class="atk-title venom-text">&#9670; VENOM ATTACK &#9670;</div>
-          <div class="atk-sub">WPA-Enterprise Rogue AP + Cred Harvest</div>
-          <button class="retro-btn venom full" onclick="triggerVenom()">LAUNCH VENOM</button>
+        <div class="atk-card atk-card-venom">
+          <div class="atk-header">
+            <span class="atk-icon">☠</span>
+            <span class="atk-name venom-glow">VENOM ATTACK</span>
+          </div>
+          <div class="atk-desc">Rogue WPA-Enterprise AP. Auto-generates certs, captures MSCHAPv2 / EAP credentials live.</div>
+          <button class="btn btn-venom full" onclick="triggerVenom()">◈ LAUNCH VENOM ◈</button>
         </div>
 
-        <div class="attack-block">
-          <div class="atk-title">ENUMERATE CLIENTS</div>
-          <button class="retro-btn full" onclick="enumClients()">ENUMERATE</button>
+        <div class="atk-card">
+          <div class="atk-header">
+            <span class="atk-icon">👥</span>
+            <span class="atk-name">ENUM CLIENTS</span>
+          </div>
+          <div class="atk-desc">List all stations currently associated with the target AP.</div>
+          <button class="btn full" onclick="enumClients()">ENUMERATE CLIENTS</button>
         </div>
-      </div>
 
-      <!-- Loot -->
-      <div class="panel-section" id="section-loot">
-        <div class="panel-title">[ LOOT ]
-          <button class="mini-btn" onclick="refreshLoot()">REFRESH</button>
-        </div>
+      </section>
+
+      <!-- LOOT -->
+      <section class="card" id="section-loot">
+        <h2 class="card-title">
+          <span class="title-icon">◈</span> LOOT
+          <button class="btn-icon" onclick="refreshLoot()">↺ REFRESH</button>
+        </h2>
         <div id="loot-list" class="loot-list"></div>
         <div id="loot-viewer" class="loot-viewer"></div>
-      </div>
+      </section>
 
-    </div>
+    </aside>
   </div>
+
+  <!-- footer -->
+  <footer class="footer">
+    VENOM v3.0 &nbsp;|&nbsp; sinXne0 &nbsp;|&nbsp; AUTHORIZED TESTING ONLY
+  </footer>
 
   <script src="/static/js/app.js"></script>
 </body>

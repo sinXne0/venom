@@ -1,38 +1,74 @@
-/* VENOM Web UI - Frontend Logic */
+/* ============================================================
+   VENOM v3.0 — Web UI Frontend
+   ============================================================ */
 
 "use strict";
 
-// ── State ─────────────────────────────────────────────────
-let selectedNetwork = null;
+// ── State ──────────────────────────────────────────────────────
+const startTime = Date.now();
+let isRunning   = false;
 
-// ── SSE terminal stream ────────────────────────────────────
-const terminal = document.getElementById("terminal");
+// ── DOM refs ───────────────────────────────────────────────────
+const terminal      = document.getElementById("terminal");
+const procIndicator = document.getElementById("proc-indicator");
+const badgeStatus   = document.getElementById("badge-status");
+const lbDots        = document.getElementById("lb-dots");
+
+// ── Uptime clock ───────────────────────────────────────────────
+function padZ(n) { return String(n).padStart(2, "0"); }
+setInterval(() => {
+  const s = Math.floor((Date.now() - startTime) / 1000);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const sec = s % 60;
+  const el = document.getElementById("uptime");
+  if (el) el.textContent = `${padZ(h)}:${padZ(m)}:${padZ(sec)}`;
+}, 1000);
+
+// ── Launching bar animation ────────────────────────────────────
+let dotCount = 0;
+setInterval(() => {
+  dotCount = (dotCount + 1) % 4;
+  if (lbDots) lbDots.textContent = ".".repeat(dotCount);
+}, 500);
+
+// ── Process status ─────────────────────────────────────────────
+function setRunning(active) {
+  isRunning = active;
+  if (procIndicator) procIndicator.classList.toggle("active", active);
+  if (badgeStatus) {
+    badgeStatus.textContent = active ? "RUNNING" : "IDLE";
+    badgeStatus.classList.toggle("active", active);
+  }
+}
+
+// ── SSE terminal stream ────────────────────────────────────────
 const evtSource = new EventSource("/stream");
-
 evtSource.onmessage = (e) => {
-  if (!e.data) return;           // keepalive
-  const line = JSON.parse(e.data);
-  appendTerminal(line);
+  if (!e.data || e.data.trim() === "") return;
+  try {
+    const line = JSON.parse(e.data);
+    if (line) {
+      appendTerminal(line);
+      if (/exited with code/i.test(line)) setRunning(false);
+      else setRunning(true);
+    }
+  } catch (_) {}
 };
+evtSource.onerror = () => appendTerminal("[!] Stream disconnected.\n", "warn");
 
-evtSource.onerror = () => {
-  appendTerminal("[!] Stream disconnected.\n", "warn");
-};
-
+// ── Terminal output ────────────────────────────────────────────
 function appendTerminal(text, forceCls = null) {
   if (!text) return;
   const div = document.createElement("div");
-  if (forceCls) {
-    div.className = "line-" + forceCls;
-  } else if (/\[\+\]|OK|captured|success/i.test(text)) {
-    div.className = "line-ok";
-  } else if (/\[!\]|error|fail|warn/i.test(text)) {
-    div.className = "line-warn";
-  } else if (/\[\*\]|starting|monitor|scan/i.test(text)) {
-    div.className = "line-info";
-  } else if (/username|password|mschapv2|credential/i.test(text)) {
-    div.className = "line-cred";
+  let cls = forceCls;
+  if (!cls) {
+    if (/\[\+\]|captured|success|\[OK\]/i.test(text))                    cls = "ok";
+    else if (/\[!\]|error|fail|denied|invalid/i.test(text))              cls = "warn";
+    else if (/\[\*\]|starting|monitor|scanning|launching/i.test(text))   cls = "info";
+    else if (/username|password|mschapv2|credential|hash/i.test(text))   cls = "cred";
   }
+  if (cls) div.className = "line-" + cls;
   div.textContent = text;
   terminal.appendChild(div);
   terminal.scrollTop = terminal.scrollHeight;
@@ -40,16 +76,22 @@ function appendTerminal(text, forceCls = null) {
 
 function clearTerminal() {
   terminal.innerHTML = "";
+  appendTerminal("[*] Terminal cleared.\n", "info");
 }
 
-// ── API helpers ────────────────────────────────────────────
+// ── API helper ─────────────────────────────────────────────────
 async function api(path, body = null) {
-  const opts = body
+  const opts = body !== null
     ? { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }
     : { method: "GET" };
   try {
     const r = await fetch(path, opts);
-    return await r.json();
+    const data = await r.json();
+    if (!r.ok) {
+      appendTerminal(`[!] ${data.error || "Request failed"}\n`, "warn");
+      return null;
+    }
+    return data;
   } catch (err) {
     appendTerminal(`[!] API error: ${err}\n`, "warn");
     return null;
@@ -59,22 +101,24 @@ async function api(path, body = null) {
 async function refreshState() {
   const s = await api("/api/state");
   if (!s) return;
-  document.getElementById("st-iface").textContent = s.wifi_iface || "Not Set";
-  document.getElementById("st-mon").textContent   = s.monitor_iface || "No";
-  document.getElementById("st-ssid").textContent  = s.target_ssid || "Not Set";
-  document.getElementById("st-bssid").textContent = s.target_bssid || "—";
-  document.getElementById("st-chan").textContent   = s.target_channel || "—";
+  setText("st-iface", s.wifi_iface  || "NOT SET");
+  setText("st-mon",   s.monitor_iface || "OFF");
+  setText("st-ssid",  s.target_ssid  || "NOT SET");
+  setText("st-bssid", s.target_bssid || "—");
+  setText("st-chan",   s.target_channel || "—");
 }
 
-// ── Interface ─────────────────────────────────────────────
+function setText(id, val) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = val;
+}
+
+// ── Interface ──────────────────────────────────────────────────
 async function setIface() {
   const sel = document.getElementById("iface-select");
-  if (!sel.value) return;
+  if (!sel.value) { appendTerminal("[!] No interface selected.\n", "warn"); return; }
   const r = await api("/api/set_iface", { iface: sel.value });
-  if (r?.ok) {
-    appendTerminal(`[*] Interface set: ${sel.value}\n`, "info");
-    refreshState();
-  }
+  if (r?.ok) { appendTerminal(`[+] Interface set: ${sel.value}\n`, "ok"); refreshState(); }
 }
 
 async function refreshIfaces() {
@@ -82,143 +126,160 @@ async function refreshIfaces() {
   if (!ifaces) return;
   const sel = document.getElementById("iface-select");
   const cur = sel.value;
-  sel.innerHTML = '<option value="">-- select --</option>' +
-    ifaces.map(i => `<option value="${i}" ${i === cur ? "selected" : ""}>${i}</option>`).join("");
-  appendTerminal(`[*] Interfaces refreshed\n`, "info");
+  sel.innerHTML = '<option value="">— select interface —</option>' +
+    ifaces.map(i => `<option value="${esc(i)}"${i === cur ? " selected" : ""}>${esc(i)}</option>`).join("");
+  appendTerminal(`[*] Found ${ifaces.length} interface(s).\n`, "info");
 }
 
 async function enableMonitor() {
   appendTerminal("[*] Enabling monitor mode...\n", "info");
+  setRunning(true);
   const r = await api("/api/monitor/enable", {});
-  if (r?.ok) refreshState();
+  if (r?.ok) { appendTerminal(`[+] Monitor: ${r.state.monitor_iface || "enabled"}\n`, "ok"); refreshState(); }
 }
 
 async function disableMonitor() {
   appendTerminal("[*] Disabling monitor mode...\n", "info");
   const r = await api("/api/monitor/disable", {});
-  if (r?.ok) refreshState();
+  if (r?.ok) { appendTerminal("[+] Monitor mode disabled.\n", "ok"); refreshState(); }
 }
 
-// ── Scan ──────────────────────────────────────────────────
+// ── Scan ───────────────────────────────────────────────────────
 async function scanNetworks() {
   const sel = document.getElementById("iface-select");
-  appendTerminal("[*] Scanning networks...\n", "info");
+  const btn = document.getElementById("scan-btn-text");
+  if (btn) btn.textContent = "⏳ SCANNING...";
+  appendTerminal("[*] Scanning for networks...\n", "info");
   const nets = await api("/api/scan", { iface: sel.value });
+  if (btn) btn.textContent = "▶ SCAN NETWORKS";
   if (!nets) return;
-  renderScanResults(nets);
+  renderScan(nets);
+  appendTerminal(`[+] Found ${nets.length} network(s).\n`, "ok");
 }
 
-function renderScanResults(nets) {
-  const container = document.getElementById("scan-results");
+function signalBars(sig) {
+  const dbm = parseFloat(sig) || -100;
+  // -50+ = 4 bars, -60 = 3, -70 = 2, -80 = 1, worse = 0
+  const bars = dbm >= -50 ? 4 : dbm >= -65 ? 3 : dbm >= -75 ? 2 : dbm >= -85 ? 1 : 0;
+  const heights = [4, 6, 8, 10];
+  return `<span class="sig-bar">` +
+    heights.map((h, i) =>
+      `<span style="height:${h}px" ${i < bars ? 'class="lit"' : ""}></span>`
+    ).join("") + `</span>`;
+}
+
+function renderScan(nets) {
+  const c = document.getElementById("scan-results");
   if (!nets.length) {
-    container.innerHTML = '<div style="color:#555;font-size:11px">No networks found.</div>';
+    c.innerHTML = '<div class="scan-empty">No networks found.</div>';
     return;
   }
-  container.innerHTML = nets.map((n, i) => `
-    <div class="scan-row" onclick="selectTarget(${i})" id="scan-row-${i}"
-         data-bssid="${n.bssid}" data-ssid="${escHtml(n.ssid)}"
-         data-channel="${n.channel}" data-signal="${n.signal}">
-      <div class="scan-ssid">${escHtml(n.ssid) || "<hidden>"}</div>
+  c.innerHTML = nets.map((n, i) => `
+    <div class="scan-row" id="sr-${i}" onclick="selectTarget(${i})"
+         data-bssid="${esc(n.bssid)}" data-ssid="${esc(n.ssid)}"
+         data-channel="${esc(n.channel)}" data-signal="${esc(n.signal)}">
+      <div class="scan-ssid">${esc(n.ssid) || "<hidden>"}</div>
+      <div class="scan-bssid">${esc(n.bssid)}</div>
       <div class="scan-meta">
-        ${n.bssid} &nbsp;
-        <span class="scan-signal">${n.signal || "?"}</span> &nbsp;
-        CH ${n.channel || "?"} &nbsp;
-        ${escHtml(n.vendor || "")}
+        <span class="scan-ch">CH ${esc(n.channel) || "?"}</span>
+        <span class="scan-sig">${esc(n.signal) || "?"}${signalBars(n.signal)}</span>
+        <span class="scan-vendor">${esc(n.vendor) || ""}</span>
       </div>
-    </div>
-  `).join("");
+    </div>`
+  ).join("");
 }
 
 async function selectTarget(idx) {
-  const row = document.getElementById(`scan-row-${idx}`);
+  const row = document.getElementById(`sr-${idx}`);
   if (!row) return;
   document.querySelectorAll(".scan-row").forEach(r => r.classList.remove("selected"));
   row.classList.add("selected");
-  const data = {
-    bssid:   row.dataset.bssid,
-    ssid:    row.dataset.ssid,
-    channel: row.dataset.channel,
-  };
+  const data = { bssid: row.dataset.bssid, ssid: row.dataset.ssid, channel: row.dataset.channel };
   const r = await api("/api/set_target", data);
   if (r?.ok) {
-    appendTerminal(`[+] Target: ${data.ssid} (${data.bssid}) CH ${data.channel}\n`, "ok");
+    appendTerminal(`[+] Target locked: ${data.ssid} (${data.bssid}) CH ${data.channel}\n`, "ok");
     refreshState();
   }
 }
 
-async function channelHop() {
-  appendTerminal("[*] Channel-hop scan is handled by the CLI (venom.sh → option 4).\n", "info");
-  appendTerminal("[!] Switch to the terminal and run: sudo ./venom.sh\n", "warn");
+function channelHop() {
+  appendTerminal("[*] Channel-hop scan requires the CLI (venom.sh → option 4).\n", "info");
+  appendTerminal("[!] Run: sudo ./venom.sh  then press 4\n", "warn");
 }
 
-// ── Attacks ───────────────────────────────────────────────
+// ── Attacks ────────────────────────────────────────────────────
 async function deauthAttack() {
   const packets = document.getElementById("deauth-packets").value || 64;
   const client  = document.getElementById("deauth-client").value.trim();
-  appendTerminal(`[*] Deauth → packets=${packets} client=${client || "broadcast"}\n`, "info");
+  appendTerminal(`[*] Deauth → target=${getState("st-bssid")} packets=${packets} client=${client || "broadcast"}\n`, "info");
+  setRunning(true);
   await api("/api/attack/deauth", { packets: parseInt(packets), client });
 }
 
 async function captureHandshake() {
-  appendTerminal("[*] Starting WPA handshake capture...\n", "info");
+  appendTerminal(`[*] Handshake capture → ${getState("st-ssid")} (${getState("st-bssid")})\n`, "info");
+  setRunning(true);
   await api("/api/attack/handshake", {});
 }
 
 async function pmkidAttack() {
-  appendTerminal("[*] Starting PMKID attack (60s capture)...\n", "info");
+  appendTerminal(`[*] PMKID attack → ${getState("st-bssid")}\n`, "info");
+  setRunning(true);
   await api("/api/attack/pmkid", {});
 }
 
 async function evilTwin() {
-  appendTerminal("[*] Launching Evil Twin AP...\n", "info");
+  appendTerminal(`[*] Evil Twin → cloning "${getState("st-ssid")}"\n`, "info");
+  setRunning(true);
   await api("/api/attack/evil_twin", {});
 }
 
 async function wpsAttack() {
-  appendTerminal("[*] Starting WPS PIN attack...\n", "info");
+  appendTerminal(`[*] WPS PIN attack → ${getState("st-bssid")}\n`, "info");
+  setRunning(true);
   await api("/api/attack/wps", {});
 }
 
 async function triggerVenom() {
-  appendTerminal("[*] ▶ LAUNCHING VENOM — WPA-Enterprise Rogue AP...\n", "info");
+  appendTerminal(`[*] ☠ LAUNCHING VENOM — Rogue WPA-Enterprise AP for "${getState("st-ssid")}"\n`, "info");
+  setRunning(true);
   await api("/api/attack/venom", {});
 }
 
 async function enumClients() {
-  appendTerminal("[*] Enumerating clients...\n", "info");
-  // Runs via the SSE stream from a background shell command
-  await api("/api/attack/deauth", { packets: 0 }); // placeholder hint
-  appendTerminal("[!] Client enumeration: use CLI venom.sh → option 5 for full interactive output\n", "warn");
+  appendTerminal("[*] Client enumeration runs via CLI (venom.sh → option 5).\n", "info");
+  appendTerminal("[!] Run: sudo ./venom.sh  then press 5\n", "warn");
 }
 
 async function stopProcess() {
   const r = await api("/api/stop", {});
   appendTerminal(`[*] ${r?.msg || "Stop sent"}\n`, "info");
+  setRunning(false);
 }
 
-// ── Config ────────────────────────────────────────────────
+// ── Config ─────────────────────────────────────────────────────
 function saveConfig() {
-  appendTerminal("[*] Save config is available in the CLI version (venom.sh → S)\n", "info");
+  appendTerminal("[*] Config save is in the CLI (venom.sh → S).\n", "info");
 }
 function loadConfig() {
-  appendTerminal("[*] Load config is available in the CLI version (venom.sh → L)\n", "info");
+  appendTerminal("[*] Config load is in the CLI (venom.sh → L).\n", "info");
 }
 
-// ── Loot ─────────────────────────────────────────────────
+// ── Loot ───────────────────────────────────────────────────────
 async function refreshLoot() {
   const files = await api("/api/loot");
   if (!files) return;
   const list = document.getElementById("loot-list");
   if (!files.length) {
-    list.innerHTML = '<div style="color:#444;font-size:11px">No loot yet.</div>';
+    list.innerHTML = '<div class="scan-empty">No loot captured yet.</div>';
     return;
   }
   list.innerHTML = files.map(f => `
-    <div class="loot-item" onclick="viewLoot('${f.name}')">
-      <span>${f.name}</span>
+    <div class="loot-item" onclick="viewLoot('${esc(f.name)}')">
+      <span class="loot-fname">${esc(f.name)}</span>
       <span class="loot-size">${fmtSize(f.size)}</span>
-    </div>
-  `).join("");
+    </div>`
+  ).join("");
 }
 
 async function viewLoot(filename) {
@@ -229,23 +290,30 @@ async function viewLoot(filename) {
   viewer.textContent = data.content;
 }
 
-// ── Helpers ───────────────────────────────────────────────
+// ── Scroll to section ──────────────────────────────────────────
 function showSection(name) {
-  document.getElementById(`section-${name}`)?.scrollIntoView({ behavior: "smooth" });
+  const el = document.getElementById(`section-${name}`);
+  if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
-function escHtml(str) {
+// ── Helpers ────────────────────────────────────────────────────
+function esc(str) {
   if (!str) return "";
-  return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  return String(str)
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+function getState(id) {
+  return document.getElementById(id)?.textContent?.trim() || "?";
 }
 
 function fmtSize(bytes) {
-  if (bytes < 1024) return bytes + "B";
-  if (bytes < 1048576) return (bytes / 1024).toFixed(1) + "K";
-  return (bytes / 1048576).toFixed(1) + "M";
+  if (bytes < 1024) return bytes + " B";
+  if (bytes < 1048576) return (bytes / 1024).toFixed(1) + " KB";
+  return (bytes / 1048576).toFixed(1) + " MB";
 }
 
-// ── Init ─────────────────────────────────────────────────
+// ── Init ───────────────────────────────────────────────────────
 refreshState();
 refreshLoot();
-appendTerminal("[+] VENOM Web UI ready. Select interface and target to begin.\n", "ok");
